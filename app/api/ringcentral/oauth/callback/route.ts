@@ -71,16 +71,16 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       success: true,
       message: 'RingCentral OAuth completed successfully!',
-      access_token: tokens.access_token?.substring(0, 20) + '...',
+      access_token: tokens.access_token,  // FULL TOKEN - copy this!
       expires_in: tokens.expires_in,
-      refresh_token: tokens.refresh_token ? 'Present (hidden)' : 'Not provided',
+      refresh_token: tokens.refresh_token || 'Not provided',
       scope: tokens.scope,
       owner_id: tokens.owner_id,
       endpoint_id: tokens.endpoint_id,
-      note: 'Access token is valid. Store ACCESS_TOKEN and REFRESH_TOKEN in environment variables.',
+      note: 'COPY THE FULL access_token ABOVE and send it to Henry',
       next_steps: [
-        'Add RINGCENTRAL_ACCESS_TOKEN to your .env.local',
-        'Add RINGCENTRAL_REFRESH_TOKEN to your .env.local (if provided)'
+        'Copy the entire access_token value (long string)',
+        'Send it to Henry to add to Vercel'
       ]
     })
     
