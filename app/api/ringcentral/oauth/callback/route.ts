@@ -3,6 +3,8 @@ import { NextRequest, NextResponse } from 'next/server'
 export const dynamic = 'force-dynamic'
 
 const RC_SERVER = 'https://platform.ringcentral.com'
+// HARDCODED to match oauth route EXACTLY
+const REDIRECT_URI = 'https://att-crm.vercel.app/api/ringcentral/oauth/callback'
 
 export async function GET(req: NextRequest) {
   const searchParams = req.nextUrl.searchParams
@@ -41,8 +43,7 @@ export async function GET(req: NextRequest) {
   }
   
   try {
-    const redirectUri = `${process.env.NEXT_PUBLIC_APP_URL}/api/ringcentral/oauth/callback`
-    
+    // Use HARDCODED redirect URI - must match oauth route exactly
     const tokenResponse = await fetch(`${RC_SERVER}/restapi/oauth/token`, {
       method: 'POST',
       headers: {
@@ -52,7 +53,7 @@ export async function GET(req: NextRequest) {
       body: new URLSearchParams({
         grant_type: 'authorization_code',
         code,
-        redirect_uri: redirectUri
+        redirect_uri: REDIRECT_URI
       })
     })
     
