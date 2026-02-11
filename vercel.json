@@ -5,12 +5,5 @@
       "src": "package.json",
       "use": "@vercel/next"
     }
-  ],
-  "routes": [
-    {
-      "src": "/api/twilio/webhook",
-      "methods": ["POST"],
-      "dest": "/api/twilio/webhook"
-    }
   ]
 }
