@@ -13,6 +13,10 @@ export async function GET() {
         connected: true,
         customers: customerCount,
         conversations: conversationCount,
+      },
+      ringcentral: {
+        configured: !!process.env.RINGCENTRAL_CLIENT_ID,
+        phoneNumber: process.env.RINGCENTRAL_PHONE_NUMBER,
       }
     });
   } catch (error) {
