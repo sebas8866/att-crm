@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { checkATTAvalability } from '@/lib/att-checker';
 import { generateAvailabilityResponse } from '@/lib/ai-handler';
-import { sendSMS } from '@/lib/twilio';
+import { sendSMS } from '@/lib/sms';
 import { z } from 'zod';
 
 const checkSchema = z.object({
@@ -92,13 +92,13 @@ export async function POST(req: NextRequest) {
         result.internetAir
       );
 
-      // Send response
-      const twilioResult = await sendSMS({
+      // Send response via Telnyx
+      const smsResult = await sendSMS({
         to: conversation.customer.phoneNumber,
         body: responseMessage,
       });
 
-      if (twilioResult.success) {
+      if (smsResult.success) {
         await prisma.message.create({
           data: {
             conversationId,
@@ -106,7 +106,8 @@ export async function POST(req: NextRequest) {
             body: responseMessage,
             direction: 'OUTBOUND',
             status: 'SENT',
-            twilioSid: twilioResult.sid,
+            provider: 'telnyx',
+            externalId: smsResult.id,
           },
         });
       }

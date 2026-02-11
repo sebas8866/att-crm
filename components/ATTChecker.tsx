@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Search, Wifi, Zap, AlertCircle, Loader2, Check } from 'lucide-react';
 import { cn, getStatusColor, getStatusLabel } from '@/lib/utils';
+import type { Customer } from './ConversationList';
 
 interface AvailabilityCheck {
   id: string;
@@ -11,23 +12,13 @@ interface AvailabilityCheck {
   fiberSpeeds?: string[];
   internetAir?: boolean;
   notes?: string;
-  checkedAt: string;
-}
-
-interface Customer {
-  id: string;
-  phoneNumber: string;
-  name: string | null;
-  address?: string | null;
-  city?: string | null;
-  state?: string | null;
-  zipCode?: string | null;
+  checkedAt?: string;
 }
 
 interface ATTCheckerProps {
   customer: Customer;
   conversationId: string;
-  availabilityChecks: AvailabilityCheck[];
+  availabilityChecks?: AvailabilityCheck[];
 }
 
 export function ATTChecker({
@@ -82,7 +73,7 @@ export function ATTChecker({
     }
   };
 
-  const latestCheck = result || availabilityChecks[0];
+  const latestCheck = result || availabilityChecks?.[0];
 
   return (
     <div className="space-y-4">

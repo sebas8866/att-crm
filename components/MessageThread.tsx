@@ -3,35 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Send, User, Phone, MoreVertical, Check, X, Loader2 } from 'lucide-react';
 import { cn, formatPhoneNumber, formatTime, getStatusColor, getStatusLabel } from '@/lib/utils';
-
-interface Message {
-  id: string;
-  body: string;
-  direction: string;
-  status: string;
-  createdAt: string;
-}
-
-interface Customer {
-  id: string;
-  phoneNumber: string;
-  name: string | null;
-  address?: string | null;
-  city?: string | null;
-  state?: string | null;
-  zipCode?: string | null;
-}
-
-interface Conversation {
-  id: string;
-  status: string;
-  customer: Customer;
-  messages: Message[];
-  availabilityChecks?: Array<{
-    status: string;
-    services: string[];
-  }>;
-}
+import type { Conversation, Message, Customer } from './ConversationList';
 
 interface MessageThreadProps {
   conversation: Conversation | null;

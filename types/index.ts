@@ -4,9 +4,10 @@ declare global {
   namespace NodeJS {
     interface ProcessEnv {
       DATABASE_URL: string;
-      TWILIO_ACCOUNT_SID: string;
-      TWILIO_AUTH_TOKEN: string;
-      TWILIO_PHONE_NUMBER: string;
+      TELNYX_API_KEY: string;
+      TELNYX_PHONE_NUMBER: string;
+      ADMIN_EMAIL: string;
+      ADMIN_PASSWORD_HASH: string;
       NVIDIA_API_KEY?: string;
       NEXT_PUBLIC_APP_URL: string;
     }
@@ -45,7 +46,8 @@ export interface Message {
   body: string;
   direction: 'INBOUND' | 'OUTBOUND';
   status: 'PENDING' | 'SENT' | 'DELIVERED' | 'FAILED' | 'READ';
-  twilioSid: string | null;
+  provider: string;
+  externalId: string | null;
   createdAt: Date;
 }
 

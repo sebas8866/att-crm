@@ -12,11 +12,5 @@
       "methods": ["POST"],
       "dest": "/api/twilio/webhook"
     }
-  ],
-  "crons": [
-    {
-      "path": "/api/health",
-      "schedule": "0 */6 * * *"
-    }
   ]
 }

@@ -1,11 +1,30 @@
-/**
- * Health check API route
- * Used by Vercel cron to keep the app warm
- */
+import { prisma } from '@/lib/prisma';
+
 export async function GET() {
-  return Response.json({ 
-    status: 'ok', 
-    timestamp: new Date().toISOString(),
-    version: '1.0.0'
-  });
+  try {
+    // Test database connection
+    const customerCount = await prisma.customer.count();
+    const conversationCount = await prisma.conversation.count();
+    
+    return Response.json({ 
+      status: 'ok', 
+      timestamp: new Date().toISOString(),
+      database: {
+        connected: true,
+        customers: customerCount,
+        conversations: conversationCount,
+      }
+    });
+  } catch (error) {
+    console.error('Health check failed:', error);
+    return Response.json({ 
+      status: 'error', 
+      timestamp: new Date().toISOString(),
+      error: error instanceof Error ? error.message : 'Unknown error'
+    }, { status: 500 });
+  }
+}
+
+export async function POST() {
+  return GET();
 }

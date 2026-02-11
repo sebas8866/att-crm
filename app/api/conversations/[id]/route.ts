@@ -1,37 +1,37 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { NextRequest, NextResponse } from 'next/server'
+import { prisma } from '@/lib/prisma'
 
-export async function GET(
+export const dynamic = 'force-dynamic'
+
+// PATCH update conversation
+export async function PATCH(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-    const conversation = await prisma.conversation.findUnique({
+    const { status, assignedToId, tags, notes, scheduledCallTime } = await req.json()
+
+    const updateData: any = {}
+    if (status !== undefined) updateData.status = status
+    if (assignedToId !== undefined) updateData.assignedToId = assignedToId
+    if (tags !== undefined) updateData.tags = tags
+    if (notes !== undefined) updateData.notes = notes
+    if (scheduledCallTime !== undefined) updateData.scheduledCallTime = new Date(scheduledCallTime)
+
+    const conversation = await prisma.conversation.update({
       where: { id: params.id },
+      data: updateData,
       include: {
         customer: true,
-        messages: {
-          orderBy: { createdAt: 'asc' },
-        },
-        availabilityChecks: {
-          orderBy: { createdAt: 'desc' },
-        },
-      },
-    });
+        assignedTo: {
+          select: { id: true, name: true, email: true }
+        }
+      }
+    })
 
-    if (!conversation) {
-      return NextResponse.json(
-        { error: 'Conversation not found' },
-        { status: 404 }
-      );
-    }
-
-    return NextResponse.json({ conversation });
+    return NextResponse.json({ success: true, conversation })
   } catch (error) {
-    console.error('Error fetching conversation:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch conversation' },
-      { status: 500 }
-    );
+    console.error('Error updating conversation:', error)
+    return NextResponse.json({ error: 'Failed to update conversation' }, { status: 500 })
   }
 }

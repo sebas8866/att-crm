@@ -1,49 +1,56 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { NextRequest, NextResponse } from 'next/server'
+import { prisma } from '@/lib/prisma'
 
-export async function GET(req: NextRequest) {
+export const dynamic = 'force-dynamic'
+
+export async function POST(request: NextRequest) {
   try {
-    const { searchParams } = new URL(req.url);
-    const status = searchParams.get('status');
-    const search = searchParams.get('search');
+    const body = await request.json()
+    const { customerId } = body
 
-    const where: any = {};
-
-    if (status && status !== 'ALL') {
-      where.status = status;
+    if (!customerId) {
+      return NextResponse.json(
+        { error: 'Customer ID is required' },
+        { status: 400 }
+      )
     }
 
-    if (search) {
-      where.customer = {
-        OR: [
-          { phoneNumber: { contains: search } },
-          { name: { contains: search, mode: 'insensitive' } },
-        ],
-      };
-    }
+    // Create conversation
+    const conversation = await prisma.conversation.create({
+      data: {
+        customerId,
+        status: 'NEW',
+      }
+    })
 
+    return NextResponse.json(conversation)
+  } catch (error) {
+    console.error('Error creating conversation:', error)
+    return NextResponse.json(
+      { error: 'Failed to create conversation' },
+      { status: 500 }
+    )
+  }
+}
+
+export async function GET() {
+  try {
     const conversations = await prisma.conversation.findMany({
-      where,
       include: {
         customer: true,
         messages: {
           orderBy: { createdAt: 'desc' },
           take: 1,
         },
-        availabilityChecks: {
-          orderBy: { createdAt: 'desc' },
-          take: 1,
-        },
       },
-      orderBy: { lastMessageAt: 'desc' },
-    });
-
-    return NextResponse.json({ conversations });
+      orderBy: { lastMessageAt: 'desc' }
+    })
+    return NextResponse.json(conversations)
   } catch (error) {
-    console.error('Error fetching conversations:', error);
+    console.error('Error fetching conversations:', error)
     return NextResponse.json(
       { error: 'Failed to fetch conversations' },
       { status: 500 }
-    );
+    )
   }
 }

@@ -22,24 +22,53 @@ model Customer {
   conversations Conversation[]
   messages      Message[]
   availabilityChecks AvailabilityCheck[]
+  calls         Call[]
+  installations Installation[]
 
   @@map("customers")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  password  String
+  role      UserRole @default(AGENT)
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  conversationsAssigned Conversation[] @relation("AssignedTo")
+  callsAnswered         Call[]         @relation("AnsweredBy")
+
+  @@map("users")
+}
+
+enum UserRole {
+  ADMIN
+  AGENT
 }
 
 model Conversation {
   id           String        @id @default(cuid())
   customerId   String        @map("customer_id")
+  assignedToId String?       @map("assigned_to_id")
   status       ConversationStatus @default(NEW)
+  tags         String[]      @default([])
+  scheduledCallTime DateTime? @map("scheduled_call_time")
+  notes        String?
   lastMessageAt DateTime     @default(now()) @map("last_message_at")
   createdAt    DateTime      @default(now()) @map("created_at")
   updatedAt    DateTime      @updatedAt @map("updated_at")
 
   customer     Customer      @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  assignedTo   User?         @relation("AssignedTo", fields: [assignedToId], references: [id], onDelete: SetNull)
   messages     Message[]
   availabilityChecks AvailabilityCheck[]
 
   @@index([customerId])
   @@index([status])
+  @@index([assignedToId])
   @@map("conversations")
 }
 
@@ -50,7 +79,8 @@ model Message {
   body           String
   direction      MessageDirection
   status         MessageStatus @default(PENDING)
-  twilioSid      String?  @map("twilio_sid")
+  provider       String   @default("twilio") // twilio | telnyx
+  externalId     String?  @map("external_id") // twilioSid or telnyxId
   createdAt      DateTime @default(now()) @map("created_at")
 
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
@@ -92,6 +122,12 @@ enum ConversationStatus {
   CHECKING
   RESPONDED
   CLOSED
+  NEED_TO_CALL
+  CALLED_NO_ANSWER
+  NOT_INTERESTED
+  CALL_SCHEDULED
+  FOLLOW_UP
+  PENDING_INSTALL
 }
 
 enum MessageDirection {
@@ -113,4 +149,101 @@ enum AvailabilityStatus {
   INTERNET_AIR_AVAILABLE
   NOT_AVAILABLE
   ERROR
+}
+
+model Call {
+  id          String   @id @default(cuid())
+  customerId  String   @map("customer_id")
+  phoneNumber String   @map("phone_number")
+  direction   CallDirection
+  status      CallStatus @default(RINGING)
+  duration    Int?     // Duration in seconds
+  recordingUrl String? @map("recording_url")
+  recordingSid String? @map("recording_sid")
+  twilioCallSid String @unique @map("twilio_call_sid")
+  notes       String?
+  answeredById String? @map("answered_by_id")
+  startedAt   DateTime @default(now()) @map("started_at")
+  endedAt     DateTime? @map("ended_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  customer    Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  answeredBy  User?    @relation("AnsweredBy", fields: [answeredById], references: [id], onDelete: SetNull)
+
+  @@index([customerId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("calls")
+}
+
+enum CallDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum CallStatus {
+  RINGING
+  IN_PROGRESS
+  COMPLETED
+  MISSED
+  VOICEMAIL
+  FAILED
+}
+
+model Installation {
+  id             String   @id @default(cuid())
+  customerId     String   @map("customer_id")
+  conversationId String?  @map("conversation_id")
+  installDate    DateTime @map("install_date")
+  status         InstallationStatus @default(SCHEDULED)
+  notes          String?
+  reminderSent   Boolean  @default(false) @map("reminder_sent")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  customer       Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId])
+  @@index([installDate])
+  @@index([status])
+  @@map("installations")
+}
+
+enum InstallationStatus {
+  SCHEDULED
+  COMPLETED
+  CANCELLED
+  RESCHEDULED
+}
+
+model Commission {
+  id             String   @id @default(cuid())
+  customerId     String   @map("customer_id")
+  customerName   String   @map("customer_name")
+  amount         Float
+  status         CommissionStatus @default(PENDING)
+  type           CommissionType @default(SALE)
+  installDate    DateTime? @map("install_date")
+  paidDate       DateTime? @map("paid_date")
+  notes          String?
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@index([status])
+  @@index([createdAt])
+  @@map("commissions")
+}
+
+enum CommissionStatus {
+  PENDING
+  EARNED
+  PAID
+  CHARGEBACK
+}
+
+enum CommissionType {
+  SALE
+  BONUS
+  REFERRAL
 }

@@ -4,19 +4,38 @@ import { formatDistanceToNow } from 'date-fns';
 import { MessageSquare, Loader2 } from 'lucide-react';
 import { cn, formatPhoneNumber, getStatusColor, getStatusLabel } from '@/lib/utils';
 
-interface Conversation {
+export interface Message {
+  id: string;
+  body: string;
+  direction: string;
+  status?: string;
+  createdAt: string;
+}
+
+export interface Customer {
+  id: string;
+  phoneNumber: string;
+  name: string | null;
+  address?: string | null;
+  city?: string | null;
+  state?: string | null;
+  zipCode?: string | null;
+}
+
+export interface Conversation {
   id: string;
   status: string;
   lastMessageAt: string;
-  customer: {
+  customer: Customer;
+  messages: Message[];
+  availabilityChecks?: Array<{
     id: string;
-    phoneNumber: string;
-    name: string | null;
-  };
-  messages: Array<{
-    id: string;
-    body: string;
-    direction: string;
+    status: string;
+    services: string[];
+    fiberSpeeds?: string[];
+    internetAir?: boolean;
+    notes?: string;
+    checkedAt?: string;
   }>;
 }
 
