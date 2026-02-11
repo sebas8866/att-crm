@@ -2,7 +2,7 @@
 // API Reference: https://developers.ringcentral.com/guide/messaging
 // SAFETY: ONLY uses phone number +18007209957 - NO OTHER NUMBERS EVER
 
-import { SDK } from 'ringcentral';
+import SDK from 'ringcentral';
 
 const RC_SERVER = 'https://platform.ringcentral.com';
 

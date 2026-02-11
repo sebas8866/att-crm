@@ -1,6 +1,6 @@
 // Type declaration for ringcentral SDK
 declare module 'ringcentral' {
-  export class SDK {
+  class SDK {
     constructor(config: {
       server: string;
       clientId: string;
@@ -8,19 +8,20 @@ declare module 'ringcentral' {
     });
     platform(): Platform;
   }
+  export = SDK;
 
-  export class Platform {
+  class Platform {
     login(credentials: { jwt?: string; access_token?: string }): Promise<void>;
     get(url: string): Promise<Response>;
     post(url: string, body?: any): Promise<Response>;
     auth(): Auth;
   }
 
-  export class Auth {
+  class Auth {
     setData(data: { access_token?: string; refresh_token?: string }): void;
   }
 
-  export interface Response {
+  interface Response {
     json(): Promise<any>;
   }
 }
