@@ -1,11 +1,14 @@
-// RingCentral SMS Provider - Direct REST API
-// API Reference: https://developers.ringcentral.com/guide/messaging
-// SAFETY: ONLY uses phone number +18007209957 - NO OTHER NUMBERS EVER
+// SMS Provider - Supports both Twilio (active) and RingCentral (backup)
+// TWILIO is the active provider
 
+const TWILIO_API_URL = 'https://api.twilio.com/2010-04-01';
 const RC_SERVER = 'https://platform.ringcentral.com';
 
-// HARDcoded for SAFETY - only this number can ever be used
-const AUTHORIZED_PHONE_NUMBER = '+18007209957';
+// Twilio phone number (active)
+const TWILIO_PHONE_NUMBER = '+18128183171';
+
+// RingCentral phone number (backup - kept for future use)
+const RINGCENTRAL_PHONE_NUMBER = '+18007209957';
 
 export interface SendSMSOptions {
   to: string;
@@ -13,14 +16,96 @@ export interface SendSMSOptions {
   conversationId?: string;
 }
 
-// Get access token using JWT
-async function getAccessToken(): Promise<string | null> {
+// ==================== TWILIO (ACTIVE PROVIDER) ====================
+
+export async function sendSMS({ to, body }: SendSMSOptions): Promise<{
+  success: boolean;
+  id?: string;
+  error?: string;
+}> {
+  // Try Twilio first (active provider)
+  const twilioResult = await sendTwilioSMS({ to, body });
+  if (twilioResult.success) {
+    return twilioResult;
+  }
+  
+  // If Twilio fails, try RingCentral as backup
+  console.log('Twilio failed, trying RingCentral backup...');
+  return await sendRingCentralSMS({ to, body });
+}
+
+async function sendTwilioSMS({ to, body }: SendSMSOptions): Promise<{
+  success: boolean;
+  id?: string;
+  error?: string;
+}> {
+  try {
+    const accountSid = process.env.TWILIO_ACCOUNT_SID;
+    const authToken = process.env.TWILIO_AUTH_TOKEN;
+    const fromNumber = process.env.TWILIO_PHONE_NUMBER || TWILIO_PHONE_NUMBER;
+    
+    if (!accountSid || !authToken) {
+      return { success: false, error: 'Twilio credentials not configured' };
+    }
+    
+    const normalizedTo = normalizePhoneNumber(to);
+    
+    console.log('Sending SMS via Twilio:', { 
+      from: fromNumber, 
+      to: normalizedTo, 
+      bodyLength: body.length 
+    });
+    
+    const response = await fetch(
+      `${TWILIO_API_URL}/Accounts/${accountSid}/Messages.json`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Authorization': `Basic ${Buffer.from(`${accountSid}:${authToken}`).toString('base64')}`
+        },
+        body: new URLSearchParams({
+          From: fromNumber,
+          To: normalizedTo,
+          Body: body
+        })
+      }
+    );
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error('Twilio API error:', errorData);
+      return { 
+        success: false, 
+        error: errorData.message || `HTTP ${response.status}` 
+      };
+    }
+    
+    const data = await response.json();
+    console.log('Twilio SMS sent successfully:', data.sid);
+    
+    return {
+      success: true,
+      id: data.sid,
+    };
+  } catch (error) {
+    console.error('Twilio send SMS error:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
+}
+
+// ==================== RINGCENTRAL (BACKUP PROVIDER) ====================
+
+async function getRingCentralAccessToken(): Promise<string | null> {
   const clientId = process.env.RINGCENTRAL_CLIENT_ID;
   const clientSecret = process.env.RINGCENTRAL_CLIENT_SECRET;
   const jwt = process.env.RINGCENTRAL_JWT;
   
   if (!clientId || !clientSecret || !jwt) {
-    console.error('Missing RingCentral credentials');
+    console.error('RingCentral credentials not configured');
     return null;
   }
   
@@ -39,40 +124,39 @@ async function getAccessToken(): Promise<string | null> {
     
     if (!response.ok) {
       const error = await response.json();
-      console.error('Token error:', error);
+      console.error('RingCentral token error:', error);
       return null;
     }
     
     const data = await response.json();
     return data.access_token;
   } catch (error) {
-    console.error('Get token error:', error);
+    console.error('RingCentral get token error:', error);
     return null;
   }
 }
 
-export async function sendSMS({ to, body }: SendSMSOptions): Promise<{
+async function sendRingCentralSMS({ to, body }: SendSMSOptions): Promise<{
   success: boolean;
   id?: string;
   error?: string;
 }> {
   try {
-    const accessToken = await getAccessToken();
+    const accessToken = await getRingCentralAccessToken();
     
     if (!accessToken) {
       return { success: false, error: 'Failed to authenticate with RingCentral' };
     }
     
-    // Normalize phone numbers to E.164
     const normalizedTo = normalizePhoneNumber(to);
-    const fromNumber = AUTHORIZED_PHONE_NUMBER;
-
+    const fromNumber = process.env.RINGCENTRAL_PHONE_NUMBER || RINGCENTRAL_PHONE_NUMBER;
+    
     console.log('Sending SMS via RingCentral:', { 
       from: fromNumber, 
       to: normalizedTo, 
       bodyLength: body.length 
     });
-
+    
     const response = await fetch(`${RC_SERVER}/restapi/v1.0/account/~/extension/~/sms`, {
       method: 'POST',
       headers: {
@@ -85,19 +169,19 @@ export async function sendSMS({ to, body }: SendSMSOptions): Promise<{
         text: body
       })
     });
-
+    
     if (!response.ok) {
       const error = await response.json();
-      console.error('SMS send error:', error);
+      console.error('RingCentral SMS error:', error);
       return { 
         success: false, 
         error: error.message || `HTTP ${response.status}` 
       };
     }
-
+    
     const data = await response.json();
     console.log('RingCentral SMS sent successfully:', data.id);
-
+    
     return {
       success: true,
       id: data.id,
@@ -111,7 +195,8 @@ export async function sendSMS({ to, body }: SendSMSOptions): Promise<{
   }
 }
 
-// Retry logic for failed sends
+// ==================== SHARED FUNCTIONS ====================
+
 export async function sendSMSWithRetry(
   options: SendSMSOptions,
   maxRetries = 3
@@ -132,7 +217,7 @@ export async function sendSMSWithRetry(
     }
     
     const delay = Math.pow(2, attempt - 1) * 1000;
-    console.log(`RingCentral send failed, retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`);
+    console.log(`SMS send failed, retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`);
     await new Promise(resolve => setTimeout(resolve, delay));
   }
   
@@ -157,86 +242,20 @@ export function normalizePhoneNumber(phone: string): string {
   return cleaned;
 }
 
-// Test connection to RingCentral
-export async function testRingCentralConnection(): Promise<{
-  connected: boolean;
-  extension?: string;
-  name?: string;
-  error?: string;
-}> {
-  try {
-    const accessToken = await getAccessToken();
-    
-    if (!accessToken) {
-      return { connected: false, error: 'Authentication failed' };
-    }
-    
-    const response = await fetch(`${RC_SERVER}/restapi/v1.0/account/~/extension/~`, {
-      headers: {
-        'Authorization': `Bearer ${accessToken}`
-      }
-    });
-    
-    if (!response.ok) {
-      return { connected: false, error: `HTTP ${response.status}` };
-    }
-    
-    const data = await response.json();
-    
-    return {
-      connected: true,
-      extension: data.extensionNumber,
-      name: data.name,
-    };
-  } catch (error) {
-    console.error('RingCentral connection test failed:', error);
-    return {
-      connected: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
-    };
-  }
-}
+// ==================== PROVIDER STATUS ====================
 
-// Get list of available phone numbers - READ ONLY
-export async function getPhoneNumbers(): Promise<{
-  success: boolean;
-  numbers?: Array<{ phoneNumber: string; type: string; usageType?: string }>;
-  error?: string;
+export async function getProviderStatus(): Promise<{
+  twilio: { configured: boolean; phoneNumber?: string };
+  ringcentral: { configured: boolean; phoneNumber?: string };
 }> {
-  try {
-    const accessToken = await getAccessToken();
-    
-    if (!accessToken) {
-      return { success: false, error: 'Authentication failed' };
+  return {
+    twilio: {
+      configured: !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN),
+      phoneNumber: process.env.TWILIO_PHONE_NUMBER || TWILIO_PHONE_NUMBER
+    },
+    ringcentral: {
+      configured: !!(process.env.RINGCENTRAL_CLIENT_ID && process.env.RINGCENTRAL_CLIENT_SECRET),
+      phoneNumber: process.env.RINGCENTRAL_PHONE_NUMBER || RINGCENTRAL_PHONE_NUMBER
     }
-    
-    const response = await fetch(`${RC_SERVER}/restapi/v1.0/account/~/extension/~/phone-number`, {
-      headers: {
-        'Authorization': `Bearer ${accessToken}`
-      }
-    });
-    
-    if (!response.ok) {
-      return { success: false, error: `HTTP ${response.status}` };
-    }
-    
-    const data = await response.json();
-    
-    const numbers = (data.records || []).map((record: any) => ({
-      phoneNumber: record.phoneNumber,
-      type: record.type,
-      usageType: record.usageType,
-    }));
-    
-    return {
-      success: true,
-      numbers,
-    };
-  } catch (error) {
-    console.error('Failed to get phone numbers:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
-    };
-  }
+  };
 }
