@@ -266,3 +266,4 @@ export async function POST(req: NextRequest) {
 export async function GET() {
   return NextResponse.json({ status: 'Twilio webhook endpoint active' });
 }
+// Deploy trigger: Thu Feb 12 12:54:52 EST 2026
