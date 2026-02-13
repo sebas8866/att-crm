@@ -274,3 +274,16 @@ export async function getPhoneNumbers(): Promise<{
     ]
   };
 }
+
+// Stub for testRingCentralConnection - kept for backward compatibility
+export async function testRingCentralConnection(): Promise<{
+  connected: boolean;
+  extension?: string;
+  name?: string;
+  error?: string;
+}> {
+  return {
+    connected: false,
+    error: 'RingCentral not configured'
+  };
+}
