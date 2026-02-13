@@ -259,3 +259,18 @@ export async function getProviderStatus(): Promise<{
     }
   };
 }
+
+// Stub for getPhoneNumbers - returns hardcoded info
+export async function getPhoneNumbers(): Promise<{
+  success: boolean;
+  numbers?: Array<{ phoneNumber: string; type: string }>;
+  error?: string;
+}> {
+  return {
+    success: true,
+    numbers: [
+      { phoneNumber: TWILIO_PHONE_NUMBER, type: 'twilio' },
+      { phoneNumber: RINGCENTRAL_PHONE_NUMBER, type: 'ringcentral' }
+    ]
+  };
+}
