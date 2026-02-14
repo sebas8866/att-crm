@@ -40,46 +40,31 @@ function parseAddress(text: string): { street?: string; city?: string; state?: s
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method === 'GET') {
-    return res.status(200).json({ status: 'Webhook endpoint active' });
+    return res.status(200).json({ status: 'Twilio webhook endpoint active' });
   }
   
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  console.log('=== WEBHOOK CALLED ===');
+  console.log('=== TWILIO WEBHOOK CALLED ===');
   
   try {
-    // Handle both Twilio (form data) and JSON requests
-    let from: string, body: string, messageSid: string;
+    // Twilio sends form data
+    const from = req.body.From;
+    const to = req.body.To;
+    const body = req.body.Body;
+    const messageSid = req.body.MessageSid;
     
-    if (req.headers['content-type']?.includes('application/x-www-form-urlencoded')) {
-      // Twilio form data
-      from = req.body.From;
-      body = req.body.Body;
-      messageSid = req.body.MessageSid;
-    } else {
-      // JSON (for testing)
-      from = req.body.from;
-      body = req.body.body;
-      messageSid = req.body.messageSid || `msg_${Date.now()}`;
-    }
-    
-    console.log('Webhook data:', { from, body: body?.substring(0, 50), messageSid });
+    console.log('Twilio webhook data:', { from, to, body: body?.substring(0, 50), messageSid });
     
     if (!from || !body) {
-      console.error('Missing from or body');
-      return res.status(400).json({ error: 'Missing required fields' });
+      console.error('Missing from or body in Twilio webhook');
+      return res.status(200).json({ received: true });
     }
     
     const normalizedPhone = normalizePhoneNumber(from);
     console.log('Normalized phone:', normalizedPhone);
-
-    // Check for STOP/opt-out
-    const isOptOut = /^\s*(stop|unsubscribe|cancel|end|quit)\s*$/i.test(body.trim());
-    if (isOptOut) {
-      console.log('Opt-out received from:', normalizedPhone);
-    }
 
     // Find or create customer
     let customer = await prisma.customer.findUnique({
@@ -103,6 +88,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
 
     const isNewConversation = !conversation;
+    console.log('Is new conversation:', isNewConversation);
 
     if (!conversation) {
       conversation = await prisma.conversation.create({
@@ -113,7 +99,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       });
     }
 
-    // Store message
+    // Store the incoming message
     await prisma.message.create({
       data: {
         conversationId: conversation.id,
@@ -127,11 +113,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
 
     // Send email notification
-    await sendNewMessageEmail({
-      customerName: customer.name,
-      customerPhone: normalizedPhone,
-      messageBody: body,
-    });
+    try {
+      await sendNewMessageEmail({
+        customerName: customer.name,
+        customerPhone: normalizedPhone,
+        messageBody: body,
+      });
+    } catch (emailError) {
+      console.error('Email notification failed:', emailError);
+    }
 
     // Update conversation
     await prisma.conversation.update({
@@ -139,42 +129,52 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       data: { lastMessageAt: new Date() },
     });
 
-    // Auto-reply for NEW conversations
+    // Send auto-reply for NEW conversations only
     if (isNewConversation) {
+      console.log('Sending auto-reply for new conversation...');
       const autoReply = "Hi! To confirm you qualify for the $55 Fiber deal, please reply with your Zip Code and Street Address so I can check the map.";
       
-      const smsResult = await sendSMS({
-        to: from,
-        body: autoReply,
-      });
+      try {
+        const smsResult = await sendSMS({
+          to: from,
+          body: autoReply,
+        });
 
-      if (smsResult.success) {
-        await prisma.message.create({
-          data: {
-            conversationId: conversation.id,
-            customerId: customer.id,
-            body: autoReply,
-            direction: 'OUTBOUND',
-            status: 'SENT',
-            provider: 'twilio',
-            externalId: smsResult.id,
-          },
-        });
-        
-        await prisma.conversation.update({
-          where: { id: conversation.id },
-          data: { status: 'ADDRESS_REQUESTED' },
-        });
+        if (smsResult.success) {
+          console.log('Auto-reply sent:', smsResult.id);
+          await prisma.message.create({
+            data: {
+              conversationId: conversation.id,
+              customerId: customer.id,
+              body: autoReply,
+              direction: 'OUTBOUND',
+              status: 'SENT',
+              provider: 'twilio',
+              externalId: smsResult.id,
+            },
+          });
+          
+          await prisma.conversation.update({
+            where: { id: conversation.id },
+            data: { status: 'ADDRESS_REQUESTED' },
+          });
+        }
+      } catch (smsError) {
+        console.error('Failed to send auto-reply:', smsError);
       }
     }
 
-    // Check for address
+    // Check if we already have an address for this customer
     const hasAddress = customer.address && customer.city && customer.state && customer.zipCode;
     
-    if (!hasAddress && !isNewConversation) {
+    // Try to parse address from message if no address yet
+    if (!hasAddress) {
       const parsedAddress = parseAddress(body);
-      
+      console.log('Parsed address:', parsedAddress);
+
       if (parsedAddress?.street && parsedAddress?.city && parsedAddress?.state && parsedAddress?.zipCode) {
+        console.log('Complete address detected, saving...');
+        
         await prisma.customer.update({
           where: { id: customer.id },
           data: {
@@ -190,33 +190,40 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           data: { status: 'CHECKING' },
         });
         
+        // Send thank you message
         const thankYouMessage = "Thank you! Let me check availability at your address. An agent will reach out shortly with your options.";
         
-        const smsResult = await sendSMS({
-          to: from,
-          body: thankYouMessage,
-        });
-
-        if (smsResult.success) {
-          await prisma.message.create({
-            data: {
-              conversationId: conversation.id,
-              customerId: customer.id,
-              body: thankYouMessage,
-              direction: 'OUTBOUND',
-              status: 'SENT',
-              provider: 'twilio',
-              externalId: smsResult.id,
-            },
+        try {
+          const smsResult = await sendSMS({
+            to: from,
+            body: thankYouMessage,
           });
+
+          if (smsResult.success) {
+            console.log('Thank you message sent:', smsResult.id);
+            await prisma.message.create({
+              data: {
+                conversationId: conversation.id,
+                customerId: customer.id,
+                body: thankYouMessage,
+                direction: 'OUTBOUND',
+                status: 'SENT',
+                provider: 'twilio',
+                externalId: smsResult.id,
+              },
+            });
+          }
+        } catch (smsError) {
+          console.error('Failed to send thank you message:', smsError);
         }
       }
     }
 
+    console.log('=== TWILIO WEBHOOK COMPLETED ===');
     return res.status(200).json({ received: true });
     
   } catch (error) {
-    console.error('Webhook error:', error);
+    console.error('=== TWILIO WEBHOOK ERROR ===', error);
     return res.status(200).json({ received: true });
   }
 }
