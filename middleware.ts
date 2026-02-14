@@ -25,6 +25,8 @@ export async function middleware(request: NextRequest) {
     '/api/auth/logout', 
     '/api/telnyx/webhook',
     '/api/telnyx/test',
+    '/api/twilio/webhook',
+    '/api/webhook',
     '/api/admin/migrate',  // Schema migration
     '/api/health',
     '/api/debug/reset'
