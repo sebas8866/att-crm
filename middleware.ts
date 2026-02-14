@@ -26,10 +26,11 @@ export async function middleware(request: NextRequest) {
     '/api/telnyx/webhook',
     '/api/telnyx/test',
     '/api/twilio/webhook',
-    '/api/webhook',
+    '/api/twilio-sms',
     '/api/admin/migrate',  // Schema migration
     '/api/health',
-    '/api/debug/reset'
+    '/api/debug/reset',
+    '/api/test-webhook'
   ]
   
   const isPublicPath = publicPaths.some(path => pathname === path || pathname.startsWith(path + '/'))
